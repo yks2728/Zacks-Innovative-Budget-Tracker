@@ -13,7 +13,7 @@ request.onsuccess = function(event) {
   
     // check if app is online, if yes run checkDatabase() function to send all local db data to api
     if (navigator.onLine) {
-      uploadBudget();
+      uploadRecord();
     }
 };
 
@@ -21,3 +21,47 @@ request.onerror = function(event) {
     // log error here
     console.log(event.target.errorCode);
 };
+
+function saveRecord(record) {
+    const transaction = db.transaction(['new_transaction'], 'readwrite');
+
+    const budgetTracker = transaction.objectStore('new_transaction');
+
+    budgetTracker.add(record);
+}
+
+function uploadRecord() {
+    const transaction = db.transaction(['new_transaction'], 'readwrite');
+
+    const budgetTracker = transaction.objectStore('new_transaction');
+
+    const getAll = budgetTracker.getAll();
+
+    getAll.onsuccess = function() {
+        if (getAll.result.length > 0) {
+            fetch('/api/transaction/bulk', {
+                method: 'POST',
+                body: JSON.stringify(getAll.result),
+                headers: {
+                    Accept: 'application/json, text/plain, */*',
+                    "Content-Type": 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(serverResponse => {
+                if(serverResponse.message) {
+                    throw new Error(serverResponse);
+                }
+
+                const transaction = db.transaction(['new_transaction'], 'readwrite');
+                const budgetTracker = transaction.objectStore('new_transaction');
+                budgetTracker.clear();
+            })
+            .catch(err => {
+                console.log(err);
+            });
+        }
+    };
+}
+
+window.addEventListener('online', uploadRecord);
